@@ -27,6 +27,7 @@ class Products(db.Model):
     __tablename__="products"
     id =   db.Column(db.Integer, primary_key=True)
     image= db.Column(db.String, nullable=False)
+    category= db.Column(db.String, nullable=True)
     name=  db.Column(db.String, nullable=False)
     price= db.Column(db.String,  nullable=False)
     offer= db.Column(db.String, nullable= True)
@@ -36,6 +37,7 @@ class Products(db.Model):
         return{
             "id": self.id,
             "image": self.image,
+            "category": self.category,
             "name": self.name,
             "price": self.price,
             "offer": self.offer,

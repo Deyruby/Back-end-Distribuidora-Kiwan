@@ -11,10 +11,6 @@ import cloudinary
 import cloudinary.uploader
 import cloudinary.api
 
-
-
-
-
 load_dotenv()
 
 #Configuracion en Cloudinary
@@ -87,9 +83,9 @@ def update_user():
   
     db.session.commit()
 
-    return jsonify({'Success': 'User updated'}), 201
+    return jsonify({'Success': 'Usuario actualizado'}), 201
   else:
-    return jsonify({'error': 'User not found'}), 404
+    return jsonify({'error': 'Usuario no encontrado'}), 404
   
 @app.route("/deleteuser", methods=['DELETE'])
 def delete_user():
@@ -99,11 +95,11 @@ def delete_user():
     db.session.delete(user)
     db.session.commit()
     return jsonify({
-      "msg": "User deleted",
+      "msg": "Usuario eliminado",
       "status": "Success"
     }), 203
   else:
-    return jsonify({"error":"User not find"}),404
+    return jsonify({"error":"Usuario no encontrado"}),404
   
 
 
@@ -111,6 +107,9 @@ def delete_user():
 def upload_product():
   if 'image' not in request.files:
     return jsonify({ "msg": "Imagen es requerida"}), 400 
+  
+  if "category" not in request.form:
+    return jsonify({ "msg": "Categoría es requerido"}), 400 
 
   if "name" not in request.form:
     return jsonify({ "msg": "Nombre es requerido"}), 400 
@@ -120,17 +119,18 @@ def upload_product():
   
 #Capturo todos los datos a guardar
   image= request.files.get('image')
+  category = request.form.get('category')
   name = request.form.get('name')
   price = request.form.get('price')
   offer = request.form.get('offer', None)  # Oferta es opcional
 
 #Upload de la Imagen
-  resp = cloudinary.uploader.upload(image, folder="Distribuidora Kiwan")
+  resp = cloudinary.uploader.upload(image, folder=f"Distribuidora Kiwan/{category}")
 
   if not 'secure_url' in resp:
     return jsonify({ "error": "No se pudo subir la imagen"}), 400
  
-  product = Products( image=resp['secure_url'],name=name,price=price, offer=offer, public_id=resp['public_id'])
+  product = Products( image=resp['secure_url'], category=category, name=name,price=price, offer=offer, public_id=resp['public_id'])
 
   db.session.add(product)
   db.session.commit()
@@ -139,7 +139,73 @@ def upload_product():
     return jsonify(product.serialize()), 200
     
   return jsonify({ "error": "No se pudo guardar la imagen"}), 400
+
+
+@app.route('/getproducts', methods=['GET'])
+def get_products():
+  
+  
+  products = Products.query.all()
+  products_serialized = [product.serialize() for product in products]
+    
+  return jsonify(products_serialized), 200
+
+
+@app.route('/updateproduct/<int:id>', methods=["PUT"])
+def update_product(id):
+    product = Products.query.get(id)
+    
+    if not product:
+        return jsonify({"error": "Producto no encontrado"}), 404
+    
+    
+    if "category" in request.form:
+        product.category = request.form.get('category')
+
+    # Actualizar imagen si se envía una nueva
+    if 'image' in request.files:
+        image = request.files.get('image')
+        if product.public_id:  # Si hay una imagen existente, eliminarla de Cloudinary
+            cloudinary.uploader.destroy(product.public_id)
+        resp = cloudinary.uploader.upload(image, folder=f"Distribuidora Kiwan/{product.category}")
+        product.image = resp['secure_url']
+        product.public_id = resp['public_id']
+
+    # Actualizar los demás campos si se envían
+      
+    if "name" in request.form:
+        product.name = request.form.get('name')
+        
+    if "price" in request.form:
+        product.price = request.form.get('price')
+        
+    if "offer" in request.form:
+        product.offer = request.form.get('offer')
+    
+    # Guardar cambios en la base de datos
+    db.session.commit()
+
+    return jsonify(product.serialize()), 200
+
+@app.route('/deleteproduct/<int:id>', methods=['DELETE'])
+def delete_product(id):
+    product = Products.query.filter_by(id=id).first()
+
+    if not product:
+        return jsonify({ "msj": "El producto que quiere eliminar no existe"}), 400
+    
+
+    resp = cloudinary.uploader.destroy(product.public_id)
+    if not 'result' in resp:
+        return jsonify({ "msj": "No se pudo eliminar el Producto"}), 400
+    
+    db.session.delete(product)
+    db.session.commit()
+
+    return jsonify({ "Exitoso": "Producto eliminado correctamente"}), 200
    
+
+
 
 
 
