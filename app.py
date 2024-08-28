@@ -141,14 +141,23 @@ def upload_product():
   return jsonify({ "error": "No se pudo guardar la imagen"}), 400
 
 
-@app.route('/getproducts', methods=['GET'])
-def get_products():
-  
-  
-  products = Products.query.all()
-  products_serialized = [product.serialize() for product in products]
+@app.route('/getproducts/<string:category>', methods=['GET'])
+def get_products(category):
+    # Obtén el número de página de los parámetros de la URL, por defecto la página 1
+    page = request.args.get('page', 1, type=int)
     
-  return jsonify(products_serialized), 200
+    # Realiza la consulta y paginación
+    products_category = Products.query.filter_by(category=category).paginate(page=page, per_page=20, error_out=False)
+    
+    
+    if products_category.items:
+        return jsonify({
+            'products': [product.serialize() for product in products_category.items],
+            'total_pages': products_category.pages,
+            'current_page': products_category.page,
+        }), 200
+    else:
+        return jsonify({'Error': 'No hay Productos en esta Categoría'}), 404
 
 
 @app.route('/updateproduct/<int:id>', methods=["PUT"])
