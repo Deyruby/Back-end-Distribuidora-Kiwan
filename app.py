@@ -1,5 +1,6 @@
 
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, url_for
 from flask_migrate import Migrate
@@ -10,6 +11,8 @@ from models import db, User, Products
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import JWTManager, create_access_token, get_jwt_identity, jwt_required
 
 load_dotenv()
 
@@ -25,9 +28,16 @@ app = Flask(__name__)
 app.url_map.strict_slashes = False
 app.config['SQLALCHEMY_DATABASE_URI'] = "sqlite:///test.db"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["JWT_SECRET_KEY"] = "MI_CLAVE_SECRETA"
+app.config["SECRET_KEY"] = "PALABRA_CLAVE"
+
+expires_jwt= timedelta(minutes =1)
+
 
 MIGRATE = Migrate(app, db)
 db.init_app(app)
+jwt= JWTManager(app)
+bcrypt= Bcrypt(app)
 CORS(app)
 setup_admin(app)
 
@@ -52,13 +62,40 @@ def create():
     user.name = request.json.get("name")
     user.lastname = request.json.get("lastname")
     user.email = request.json.get("email")
-    user.password = request.json.get("password")
+    password= request.json.get("password")
+    passwordHash = bcrypt.generate_password_hash(password)
+    user.password= passwordHash
    
 
     db.session.add(user)
     db.session.commit()  
 
     return f"Se creo el usuario", 201
+  
+@app.route('/login', methods=["POST"])
+def login():
+  user= request.json.get("email")
+  password= request.json.get("password")
+  usuario_existente = User.query.filter_by(email= user).first()
+  
+  if usuario_existente is not None:
+    if bcrypt.check_password_hash(usuario_existente.password, password):
+       token = create_access_token(identity=user, exprires_delta= expires_jwt)
+
+       return jsonify({
+          "token": token,
+          "status": "success",
+          "user": usuario_existente.serialize()
+          }), 201
+    else:
+            return {"message": "Contraseña incorrecta"}, 401
+  else:
+    return  {"mensaje": "El usuario no existe"}  , 404
+    
+    
+ 
+
+ 
   
 #Actualizamos un usuario
 @app.route('/updateuser', methods=["PUT"])  
@@ -104,7 +141,14 @@ def delete_user():
 
 
 @app.route('/uploadproduct', methods=["POST"])
+@jwt_required()
 def upload_product():
+
+  count_offer_carrusel = Products.query.filter_by(offer_carrusel=True).count()
+
+  if count_offer_carrusel >= 6:
+    return jsonify({"error": "Ya hay 6 productos en el carrusel."}), 400
+
   if 'image' not in request.files:
     return jsonify({ "msg": "Imagen es requerida"}), 400 
   
@@ -158,9 +202,22 @@ def get_products(category):
         }), 200
     else:
         return jsonify({'Error': 'No hay Productos en esta Categoría'}), 404
+    
+
+@app.route('/getproduct/<int:id>', methods=['GET'])    
+def get_product(id):
+   product= Products.query.get(id)
+
+
+   if product:
+      return jsonify(product.serialize()), 200
+      
+
+   return jsonify({"error": "Producto no encontrado"}), 400
 
 
 @app.route('/updateproduct/<int:id>', methods=["PUT"])
+@jwt_required()
 def update_product(id):
     product = Products.query.get(id)
     
@@ -190,6 +247,9 @@ def update_product(id):
         
     if "offer" in request.form:
         product.offer = request.form.get('offer')
+
+    if "offer_carrusel" in request.form:
+       product.offer_carrusel = request.form.get('offer_carrusel')
     
     # Guardar cambios en la base de datos
     db.session.commit()
@@ -197,6 +257,7 @@ def update_product(id):
     return jsonify(product.serialize()), 200
 
 @app.route('/deleteproduct/<int:id>', methods=['DELETE'])
+@jwt_required()
 def delete_product(id):
     product = Products.query.filter_by(id=id).first()
 

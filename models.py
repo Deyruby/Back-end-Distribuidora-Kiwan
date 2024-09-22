@@ -29,13 +29,15 @@ class Products(db.Model):
     image= db.Column(db.String, nullable=False)
     category= db.Column(db.String, nullable=True)
     name=  db.Column(db.String, nullable=False)
-    price= db.Column(db.String,  nullable=False)
+    offer_carrusel= db.Column(db.Boolean, default=False)
+    price= db.Column(db.String,  nullable=True)
     offer= db.Column(db.String, nullable= True)
     public_id= db.Column(db.String, nullable=False)
 
     def serialize(self):
         return{
             "id": self.id,
+            "offer_carrusel": self.offer_carrusel,
             "image": self.image,
             "category": self.category,
             "name": self.name,
