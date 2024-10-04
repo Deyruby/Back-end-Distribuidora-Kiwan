@@ -77,10 +77,12 @@ def login():
   user= request.json.get("email")
   password= request.json.get("password")
   usuario_existente = User.query.filter_by(email= user).first()
+
   
   if usuario_existente is not None:
     if bcrypt.check_password_hash(usuario_existente.password, password):
-       token = create_access_token(identity=user, exprires_delta= expires_jwt)
+       expires_jwt = timedelta(hours=1) 
+       token = create_access_token(identity=user, expires_delta= expires_jwt)
 
        return jsonify({
           "token": token,
