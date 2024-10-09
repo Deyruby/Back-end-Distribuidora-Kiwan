@@ -38,7 +38,7 @@ MIGRATE = Migrate(app, db)
 db.init_app(app)
 jwt= JWTManager(app)
 bcrypt= Bcrypt(app)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 setup_admin(app)
 
 # Handle/serialize errors like a JSON object
@@ -81,7 +81,7 @@ def login():
   
   if usuario_existente is not None:
     if bcrypt.check_password_hash(usuario_existente.password, password):
-       expires_jwt = timedelta(hours=1) 
+       expires_jwt = timedelta(hours=24) 
        token = create_access_token(identity=user, expires_delta= expires_jwt)
 
        return jsonify({
@@ -92,7 +92,7 @@ def login():
     else:
             return {"message": "Contraseña incorrecta"}, 401
   else:
-    return  {"mensaje": "El usuario no existe"}  , 404
+    return  {"message": "El usuario no existe"}  , 404
     
     
  
@@ -143,7 +143,7 @@ def delete_user():
 
 
 @app.route('/uploadproduct', methods=["POST"])
-@jwt_required()
+#@jwt_required()
 def upload_product():
 
   count_offer_carrusel = Products.query.filter_by(offer_carrusel=True).count()
@@ -208,7 +208,7 @@ def get_products(category):
 
 @app.route('/getproduct/<int:id>', methods=['GET'])    
 def get_product(id):
-   product= Products.query.get(id)
+   product = db.session.get(Products, id)
 
 
    if product:
@@ -218,8 +218,27 @@ def get_product(id):
    return jsonify({"error": "Producto no encontrado"}), 400
 
 
+@app.route('/products-carrusel', methods=['GET'])
+def get_productos_carrusel():
+    try:
+        # Filtrar productos donde offer_carrusel es True
+        productos_carrusel = Products.query.filter_by(offer_carrusel=True).all()
+        
+           
+        
+        
+        # Serializar los productos
+        productos_serializados = [producto.serialize() for producto in productos_carrusel]
+        
+        return jsonify({
+        'products': productos_serializados
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/updateproduct/<int:id>', methods=["PUT"])
-@jwt_required()
+#@jwt_required()
 def update_product(id):
     product = Products.query.get(id)
     
@@ -250,8 +269,19 @@ def update_product(id):
     if "offer" in request.form:
         product.offer = request.form.get('offer')
 
+    
     if "offer_carrusel" in request.form:
-       product.offer_carrusel = request.form.get('offer_carrusel')
+     offer_carrusel_value = request.form.get('offer_carrusel')
+    if offer_carrusel_value.lower() == 'true':
+        product.offer_carrusel = True
+    elif offer_carrusel_value.lower() == 'false':
+        product.offer_carrusel = False
+    else:
+        try:
+            product.offer_carrusel = bool(int(offer_carrusel_value))
+        except ValueError:
+            return jsonify({"error": "Valor inválido para offer_carrusel"}), 400
+
     
     # Guardar cambios en la base de datos
     db.session.commit()
@@ -259,7 +289,7 @@ def update_product(id):
     return jsonify(product.serialize()), 200
 
 @app.route('/deleteproduct/<int:id>', methods=['DELETE'])
-@jwt_required()
+#@jwt_required()
 def delete_product(id):
     product = Products.query.filter_by(id=id).first()
 
